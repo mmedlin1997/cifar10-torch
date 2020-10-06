@@ -1,87 +1,75 @@
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.optim import lr_scheduler 
+from torch.utils.data import Subset, DataLoader		# create dataset, dataloader
 import torchvision
 from torchvision import datasets, transforms  # image data, transform to torch tensor format 
+import sklearn
+from sklearn.model_selection import train_test_split	# split dataset
 import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
+import copy
 from timeit import default_timer as timer
 from datetime import timedelta
 import argparse
-
 from platform import python_version
-print("python", python_version())
-print("torch", torch.__version__)
-print("torchvision", torchvision.__version__)
-print("matplotlib", matplotlib.__version__)
-print("seaborn", sns.__version__)
 
-# parse arguments
-parser = argparse.ArgumentParser()
-parser.add_argument("-d","--device", help="device type(ex. cpu, cuda, cuda:0)")
-args = parser.parse_args()
+def show_versions():
+  print("python", python_version())
+  print("torch", torch.__version__)
+  print("torchvision", torchvision.__version__)
+  print("matplotlib", matplotlib.__version__)
+  print("seaborn", sns.__version__)
+  print("sklearn", sklearn.__version__)
 
-if args.device == "cpu" or args.device == "cuda" or args.device == "cuda:0":
-  print("Requested device:", args.device)
-else:
-  print("Using default device")
+# Function to set device
+def set_device(req_device):
+  # Show cuda hardware
+  if torch.cuda.is_available() == True:
+    count = torch.cuda.device_count()
+    print("GPU number of devices:", count)
+    print(*["GPU device["+str(x)+"]="+torch.cuda.get_device_name(x) for x in range(count)], sep="\n")
+    print("GPU current device:", torch.cuda.current_device())
 
-# Set CPU or GPU if availabe
-if torch.cuda.is_available() == True:
-  count = torch.cuda.device_count()
-  print("GPU number of devices:", count)
-  print(*["GPU device["+str(x)+"]="+torch.cuda.get_device_name(x) for x in range(count)], sep="\n")
-  print("GPU current device:", torch.cuda.current_device())
+  # Set device to CPU or GPU if available
+  device = torch.device('cuda:0' if torch.cuda.is_available() and not (req_device == 'cpu') else 'cpu')
+  print('Requested device:', req_device, ', using device:', device, '\n')
+  return device
 
-# device can be int or string0
-device = torch.device('cuda:0' if torch.cuda.is_available() and not (args.device == 'cpu') else 'cpu')
-print('Using device:', device)
+# Function to combine datasets into dict; split training dataset into train and validation
+def train_val_split_test(train, val_size):
+  train_idx, val_idx = train_test_split(list(range(len(train))), test_size=val_size)
+  datasets = {}
+  datasets['train'] = Subset(train, train_idx)
+  datasets['val'] = Subset(train, val_idx)
+  return datasets
 
-# Download datasets
-train = datasets.MNIST('', train=True, download=True, 
-                      transform=transforms.Compose([
-                          transforms.ToTensor()
-                      ]))
-test = datasets.MNIST('', train=False, download=True, 
-                      transform=transforms.Compose([
-                          transforms.ToTensor()
-                      ]))
-print(train)
+# Show one image
+def show_image(dataloader):
+  images, labels = next(iter(dataloader))
+  plt.imshow(images[0].view(28,28)) # images are tensors, need to reshape drop first index
+  plt.xlabel(labels[0].item()) # labels are tensors, get value with item()
+  plt.show()
 
-# split training dataset into training and validation dataset (dict)
-from sklearn.model_selection import train_test_split
-from torch.utils.data import Subset
-train_idx, val_idx = train_test_split(list(range(len(train))), test_size=0.25)
-datasets = {}
-datasets['train'] = Subset(train, train_idx)
-datasets['val'] = Subset(train, val_idx)
-
-dataloaders = {x:torch.utils.data.DataLoader(datasets[x], 10, shuffle=True, num_workers=4) for x in ['train','val']}
-x,y = next(iter(dataloaders['train']))
-print(x.shape, y.shape)
-dataset_sizes = {x: len(datasets[x]) for x in ['train', 'val']}
-print(dataset_sizes)
-
-# show one image
-index = 0
-plt.imshow(x[index].view(28,28))
-plt.xlabel(y[index].item()) # labels are tensors, get value with item()
-plt.show()
-
-# Preview dataset
-plt.figure(figsize=(5,3))
-for i in range(10):
-    plt.subplot(2,5,i+1)
+# Preview dataset by batch
+def show_images(dataloader, dataset_name):
+  images, labels = next(iter(dataloader))
+  plt.figure(figsize=(5,3))
+  batch_size = images.shape[0]
+  for i in range(batch_size):
+    plt.subplot(int(batch_size/10),10,i+1)
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
-    plt.imshow(x[i].view(28,28), cmap=plt.cm.binary) # reshape tensor(1,28,28) to matplotlib shape(28,28) 
-    plt.xlabel(y[i].item()) # labels are tensors, get value with item()
-plt.show()
+    plt.imshow(images[i].view(28,28), cmap=plt.cm.binary) # reshape tensor(1,28,28) to matplotlib shape(28,28) 
+    plt.xlabel(labels[i].item()) # labels are tensors, get value with item()
+    plt.suptitle('Batch of ' + str(batch_size) + ' images from ' + dataset_name, fontsize=16, y=.9)
+  plt.show()
 
 # Create a class to define the NN model.
-import torch.nn as nn
-import torch.nn.functional as F
-
 class Model(nn.Module):
   def __init__(self):
     super(Model, self).__init__()
@@ -100,11 +88,10 @@ class Model(nn.Module):
     out = F.log_softmax(logits, dim=1)
     return out
 
-model = Model().to(device)
-
-# Define fucntion to train the model
+# Define function to train the model
 def train_model(model, criterion, optimizer, scheduler, epochs=25):
   start = timer()
+  dataset_sizes = {x:len(datasets[x]) for x in ['train','val']}  
 
   # init model state (save) and accuracy, in the end we return the best 
   best_model_wts = copy.deepcopy(model.state_dict())
@@ -174,104 +161,156 @@ def train_model(model, criterion, optimizer, scheduler, epochs=25):
 
   return model
 
-import torch.optim as optim
-from torch.optim import lr_scheduler 
-import copy 
+# Function to test model
+def test_model(dataloader):
+  correct, total = 0, 0
+  print(device)
+  with torch.no_grad():      # do not allocate memory for gradient calculations on model 
+    for inputs, labels in dataloader:
+      # move data to device
+      inputs = inputs.to(device)
+      labels = labels.to(device)
 
-criterion = nn.NLLLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-scheduler = lr_scheduler.StepLR(optimizer, 10, gamma=0.1)
+      output = model(inputs.view(-1,784))
+      #print(output)
+      for idx, i in enumerate(output):
+        #print(idx, i, torch.argmax(i), y[idx])
+        if torch.argmax(i) == labels[idx]:
+          correct += 1
+        total += 1
+  return (correct, total)
 
-train_model(model, criterion, optimizer, scheduler, epochs=5)
-
-# test model
-test_loader = torch.utils.data.DataLoader(test, batch_size=10, shuffle=False)
-correct, total = 0, 0
-print(device)
-with torch.no_grad():      # do not allocate memory for gradient calculations on model 
-    for inputs, labels in test_loader:
-        # move data to device
-        inputs = inputs.to(device)
-        labels = labels.to(device)
-
-        output = model(inputs.view(-1,784))
-        #print(output)
-        for idx, i in enumerate(output):
-            #print(idx, i, torch.argmax(i), y[idx])
-            if torch.argmax(i) == labels[idx]:
-                correct += 1
-            total += 1
-
-print("Accuracy: ", round(correct/total, 3))
-
-# Save model as PyTorch
-checkpoint = {'model_state_dict': model.state_dict(),
-              'optimizer_state_dict': optimizer.state_dict()}
-
-torch.save(checkpoint, 'checkpoint.pth')
-
-# Load model as PyTorch
-checkpoint = torch.load('checkpoint.pth')
-model.load_state_dict(checkpoint['model_state_dict'])
-optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-print(checkpoint.keys())
-print(checkpoint['model_state_dict'].keys())
-print(checkpoint['optimizer_state_dict'].keys())
-
-# Results
-# Inspect one result
-# NOTE: model is on GPU if avaiable, but CPU specified to matplotlib plots 
-index = 5
-expected = labels[index].cpu().item()
-inferred = torch.argmax(model(inputs[index].view(-1,784))[0]).cpu().item()
-plt.imshow(inputs[index].cpu().view(28,28))
-plt.xlabel(inferred)
-plt.show()
-
-# Inspect batch
-# NOTE: images predicted on GPU if available, then moved to CPU for matplotlib plot 
-batch_size = 300
-test_loader = torch.utils.data.DataLoader(test, batch_size=batch_size, shuffle=False)
-plt.figure(figsize=(10,6))
-for test_images, test_labels in test_loader:
+# Function to show a sample of prediction images, just one batch
+# NOTE: images predicted on GPU if available, then moved to CPU for matplotlib plot
+def show_prediction_images(dataloader, device):
+  plt.figure(figsize=(16,8))
+  test_images, test_labels = next(iter(dataloader))
   output = model(test_images.to(device).view(-1,784)).cpu()  
+  batch_size = len(output)
   for i, img in enumerate(output):
     expected = test_labels[i]
     inferred = torch.argmax(img)
-    cmap = plt.cm.binary if expected == inferred else plt.cm.autumn
-    plt.subplot(batch_size/20, 20, i+1)
+    cmap = plt.cm.binary if expected == inferred else plt.cm.autumn  
+    plt.subplot(int(batch_size/20), 20, i+1)
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
-    plt.imshow(test_images[i].view(28,28), cmap=cmap) 
-    plt.xlabel(expected.item())
+    plt.imshow(test_images[i].view(28,28), cmap=cmap)
+    confidence = round(torch.max(torch.exp(img)).item()*100, 1)
+    string = str(expected.item()) + "," + str(inferred.item()) + "," + str(confidence)
+    plt.xlabel(string)
     plt.suptitle('Batch of ' + str(batch_size), fontsize=16, y=.9)
-  break
-plt.show()
+  plt.show()
 
-#%% Confusion Matrix
-# Inspect batch
-batch_size = 100
-test_loader = torch.utils.data.DataLoader(test, batch_size=batch_size, shuffle=False)
+# Function to show Confusion Matrix
+def confusion_matrix(dataloader, num_classes, device):
+  # Initialize confusion matrix
+  class_names = [i for i in range(num_classes)]
+  cf_matrix = torch.zeros((num_classes, num_classes), dtype=torch.uint8)
 
-num_classes = 10
-class_names = [i for i in range(10)]
-cf_matrix = torch.zeros((num_classes, num_classes), dtype=torch.uint8)
-
-for test_images, test_labels in test_loader:
-  output = model(test_images.to(device).view(-1,784)).cpu()  
-  for i, img in enumerate(output):
-    expected = test_labels[i]
-    inferred = torch.argmax(img)
-    cf_matrix[expected][inferred] += 1
-
-plt.figure(figsize=(10,6))
-ax = sns.heatmap(cf_matrix, annot=True, 
+  # Count expected and inferred results
+  for images, labels in dataloader:
+    output = model(images.to(device).view(-1,784)).cpu()  
+    for i, img in enumerate(output):
+      expected = labels[i]
+      inferred = torch.argmax(img)
+      cf_matrix[expected][inferred] += 1
+ 
+  # Plot
+  plt.figure(figsize=(10,6))
+  ax = sns.heatmap(cf_matrix, annot=True, 
                  yticklabels=class_names, xticklabels=class_names, fmt='', 
                  linewidths=1, linecolor='k', cmap='Blues')
-ax.set(title="Confusion Matrix Heatmap", xlabel="Predicted", ylabel="Actual",)
+  ax.set(title="Confusion Matrix Heatmap", xlabel="Predicted", ylabel="Actual",)
+  plt.show()
+  print('Total test digits:', cf_matrix.sum().item())
+  print('Predicted distribution:', cf_matrix.sum(0))
+  print('Actual distribution:', cf_matrix.sum(1))
 
-print('Total test digits:', cf_matrix.sum().item())
-print('Predicted distribution:', cf_matrix.sum(0))
-print('Actual distribution:', cf_matrix.sum(1))
+if __name__ == "__main__":
+  show_versions()
+
+  # parse arguments
+  parser = argparse.ArgumentParser()
+  parser.add_argument("-d","--device", help="device type(ex. cpu, cuda, cuda:0)")
+  args = parser.parse_args()
+  
+  # Set device to CPU or GPU
+  device = set_device(args.device)
+
+  # Download datasets
+  train = datasets.MNIST('', train=True, download=True, 
+                      transform=transforms.Compose([
+                          transforms.ToTensor()
+                      ]))
+  test = datasets.MNIST('', train=False, download=True, 
+                      transform=transforms.Compose([
+                          transforms.ToTensor()
+                      ]))
+
+  # Split train -> train+val datasets, put both in dictionary
+  datasets = train_val_split_test(train, 0.25)
+  print('Dataset sizes(train):', {x: len(datasets[x]) for x in ['train', 'val']})
+  print('Dataset sizes(test):', len(test))
+
+  # Create training dataloaders (iterable object over a dataset)
+  dataloaders = {x:DataLoader(datasets[x], batch_size=10, shuffle=True, num_workers=4) for x in ['train','val']}
+  
+  # Show some images to verify dataset and dataloaders are functional
+  show_image(dataloaders['train'])
+  show_images(dataloaders['train'], 'train')
+
+  # Train model
+  model = Model().to(device)
+  criterion = nn.NLLLoss()
+  optimizer = optim.Adam(model.parameters(), lr=0.001)
+  scheduler = lr_scheduler.StepLR(optimizer, 10, gamma=0.1)
+  train_model(model, criterion, optimizer, scheduler, epochs=1)
+
+  # Test model
+  dataloader = DataLoader(test, batch_size=100, shuffle=False)
+  correct, total = test_model(dataloader)
+  print("Accuracy: ", round(correct/total, 3))
+  show_prediction_images(dataloader, device)
+  confusion_matrix(dataloader, 10, device)
+
+  # Save model as PyTorch
+  checkpoint = {'model_state_dict': model.state_dict(),
+              'optimizer_state_dict': optimizer.state_dict()}
+  torch.save(checkpoint, 'checkpoint.pth')
+
+  # Load model as PyTorch
+  #checkpoint = torch.load('checkpoint.pth')
+  #model.load_state_dict(checkpoint['model_state_dict'])
+  #optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+  #print(checkpoint.keys())
+  #print(checkpoint['model_state_dict'].keys())
+  #print(checkpoint['optimizer_state_dict'].keys())
+
+
+
+
+
+#  test_loader = DataLoader(test, batch_size=10, shuffle=False)
+#  images, labels = next(iter(test_loader))
+#  print('')
+#  images.to(device)
+#  labels.to(device)
+#  expected = labels[0].cpu().item()
+#  output = model(images[0].view(-1,784)).cpu()
+#  print(output.shape, output)
+#  inferred = torch.argmax([0]).cpu().item()
+#  show_image(images[0], labels[0])
+
+
+  # Results
+  # Inspect one result
+  # NOTE: model is on GPU if avaiable, but CPU specified to matplotlib plots 
+  #index = 5
+  #expected = labels[index].cpu().item()
+  #inferred = torch.argmax(model(inputs[index].view(-1,784))[0]).cpu().item()
+  #plt.imshow(inputs[index].cpu().view(28,28))
+  #plt.xlabel(inferred)
+  #plt.show()
+
 
