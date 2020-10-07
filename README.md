@@ -8,3 +8,7 @@ Select target processor with command line option -d. Options are: cpu, cuda, cud
 ```bash
 python prod.py -d cuda
 ```
+Enable training and production inference modes with command line toggles: -t,--train; -p,--prod 
+```bash
+python prod.py -d cuda -t -p
+```

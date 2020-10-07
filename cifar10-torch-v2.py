@@ -233,6 +233,8 @@ if __name__ == "__main__":
   # parse arguments
   parser = argparse.ArgumentParser()
   parser.add_argument("-d","--device", help="device type(ex. cpu, cuda, cuda:0)")
+  parser.add_argument("-t","--train", help="training mode", action="store_true")
+  parser.add_argument("-p","--prod", help="production mode", action="store_true")
   args = parser.parse_args()
   
   # Set device to CPU or GPU
@@ -252,65 +254,72 @@ if __name__ == "__main__":
   datasets = train_val_split_test(train, 0.25)
   print('Dataset sizes(train):', {x: len(datasets[x]) for x in ['train', 'val']})
   print('Dataset sizes(test):', len(test))
-
-  # Create training dataloaders (iterable object over a dataset)
-  dataloaders = {x:DataLoader(datasets[x], batch_size=10, shuffle=True, num_workers=4) for x in ['train','val']}
   
-  # Show some images to verify dataset and dataloaders are functional
-  show_image(dataloaders['train'])
-  show_images(dataloaders['train'], 'train')
+  if args.train:
+    print("Training model...")
+ 
+    # Create training dataloaders (iterable object over a dataset)
+    dataloaders = {x:DataLoader(datasets[x], batch_size=10, shuffle=True, num_workers=4) for x in ['train','val']}
+  
+    # Show some images to verify dataset and dataloaders are functional
+    show_image(dataloaders['train'])
+    show_images(dataloaders['train'], 'train')
 
-  # Train model
-  model = Model().to(device)
-  criterion = nn.NLLLoss()
-  optimizer = optim.Adam(model.parameters(), lr=0.001)
-  scheduler = lr_scheduler.StepLR(optimizer, 10, gamma=0.1)
-  train_model(model, criterion, optimizer, scheduler, epochs=1)
+    # Train model
+    model = Model().to(device)
+    criterion = nn.NLLLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    scheduler = lr_scheduler.StepLR(optimizer, 10, gamma=0.1)
 
-  # Test model
-  dataloader = DataLoader(test, batch_size=100, shuffle=False)
-  correct, total = test_model(dataloader)
-  print("Accuracy: ", round(correct/total, 3))
-  show_prediction_images(dataloader, device)
-  confusion_matrix(dataloader, 10, device)
+    train_model(model, criterion, optimizer, scheduler, epochs=5)
 
-  # Save model as PyTorch
-  checkpoint = {'model_state_dict': model.state_dict(),
+    # Test model
+    dataloader = DataLoader(test, batch_size=100, shuffle=False)
+    correct, total = test_model(dataloader)
+    print("Accuracy: ", round(correct/total, 3))
+    show_prediction_images(dataloader, device)
+    confusion_matrix(dataloader, 10, device)
+
+    # Save model as PyTorch
+    checkpoint = {'model_state_dict': model.state_dict(),
               'optimizer_state_dict': optimizer.state_dict()}
-  torch.save(checkpoint, 'checkpoint.pth')
+    torch.save(checkpoint, 'checkpoint.pth')
 
-  # Load model as PyTorch
-  #checkpoint = torch.load('checkpoint.pth')
-  #model.load_state_dict(checkpoint['model_state_dict'])
-  #optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-  #print(checkpoint.keys())
-  #print(checkpoint['model_state_dict'].keys())
-  #print(checkpoint['optimizer_state_dict'].keys())
+  if args.prod:
+    print("Performing production mode inference...")
 
+    model = Model().to(device)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
+    # Load model as PyTorch
+    checkpoint = torch.load('checkpoint.pth')
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    print(checkpoint.keys())
+    print(checkpoint['model_state_dict'].keys())
+    print(checkpoint['optimizer_state_dict'].keys())
 
-
-
-#  test_loader = DataLoader(test, batch_size=10, shuffle=False)
-#  images, labels = next(iter(test_loader))
-#  print('')
-#  images.to(device)
-#  labels.to(device)
-#  expected = labels[0].cpu().item()
-#  output = model(images[0].view(-1,784)).cpu()
-#  print(output.shape, output)
-#  inferred = torch.argmax([0]).cpu().item()
-#  show_image(images[0], labels[0])
-
-
-  # Results
-  # Inspect one result
-  # NOTE: model is on GPU if avaiable, but CPU specified to matplotlib plots 
-  #index = 5
-  #expected = labels[index].cpu().item()
-  #inferred = torch.argmax(model(inputs[index].view(-1,784))[0]).cpu().item()
-  #plt.imshow(inputs[index].cpu().view(28,28))
-  #plt.xlabel(inferred)
-  #plt.show()
-
-
+    # Test model
+    dataloader = DataLoader(test, batch_size=100, shuffle=False)
+    correct, total = test_model(dataloader)
+    print("Accuracy: ", round(correct/total, 3))
+    #show_prediction_images(dataloader, device)
+    #confusion_matrix(dataloader, 10, device)
+    
+    # Measure time performance
+    dataloader = DataLoader(test, batch_size=100, shuffle=False)
+    count, fails = 0, 0
+    for images, labels in dataloader:
+      # move data to device
+      images = images.to(device)
+      labels = labels.to(device)
+      output = model(images.to(device).view(-1,784)).cpu()
+      count += len(output)
+      for i, img in enumerate(output):
+        expected = labels[i]
+        inferred = torch.argmax(img)
+        if expected != inferred:
+          confidence = round(torch.max(torch.exp(img)).item()*100, 1)
+          print("Inference error: " + str(expected.item()) + "," + str(inferred.item()) + "," + str(confidence))
+          fails += 1
+    print("Results: " + str(fails) + " errors in " + str(count) + " inferences (" + str(round(fails/count*100,2)) + "%)")
