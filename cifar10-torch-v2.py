@@ -227,6 +227,42 @@ def confusion_matrix(dataloader, num_classes, device):
   print('Predicted distribution:', cf_matrix.sum(0))
   print('Actual distribution:', cf_matrix.sum(1))
 
+def execute(dataset, batch_size):
+  dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+  count, fails = 0, 0
+  time_to_dev, time_to_cpu, time_dev, total_time = 0,0,0,0
+  for images, labels in dataloader:
+    # measure times
+    start = timer() 
+    images = images.to(device)
+    labels = labels.to(device)
+    time_to_dev += timer() - start
+
+    start = timer()
+    output = model(images.view(-1,784))
+    time_dev += timer() - start
+
+    start = timer()
+    output.cpu()
+    time_to_cpu += timer() - start
+
+    count += len(output)
+    for i, img in enumerate(output):
+      expected = labels[i]
+      inferred = torch.argmax(img)
+      if expected != inferred:
+        confidence = round(torch.max(torch.exp(img)).item()*100, 1)
+        #print("Inference error: " + str(expected.item()) + "," + str(inferred.item()) + "," + str(confidence))
+        fails += 1
+  print("Results: " + str(fails) + " errors in " + str(count) + " (" + str(round(fails/count*100,2)) + "%)")
+   
+  total_time = time_to_dev + time_dev + time_to_cpu
+  print('Device:', device, ', total images:', str(count), ', batch_size:', str(batch_size))
+  print('To device time  : ' + str(time_to_dev) + ' us, ' + str(round(time_to_dev/total_time*100.0,2))+'%')
+  print('Processing time : ' + str(time_dev) + ' us, ' + str(round(time_dev/total_time*100.0,2))+'%')
+  print('From device time: ' + str(time_to_cpu) + ' us, ' + str(round(time_to_cpu/total_time*100.0,2))+'%')
+  print('Total time      : ' + str(total_time) + ' us, ' + str(round(total_time/total_time*100.0,2))+'%')
+
 if __name__ == "__main__":
   show_versions()
 
@@ -307,19 +343,6 @@ if __name__ == "__main__":
     #confusion_matrix(dataloader, 10, device)
     
     # Measure time performance
-    dataloader = DataLoader(test, batch_size=100, shuffle=False)
-    count, fails = 0, 0
-    for images, labels in dataloader:
-      # move data to device
-      images = images.to(device)
-      labels = labels.to(device)
-      output = model(images.to(device).view(-1,784)).cpu()
-      count += len(output)
-      for i, img in enumerate(output):
-        expected = labels[i]
-        inferred = torch.argmax(img)
-        if expected != inferred:
-          confidence = round(torch.max(torch.exp(img)).item()*100, 1)
-          print("Inference error: " + str(expected.item()) + "," + str(inferred.item()) + "," + str(confidence))
-          fails += 1
-    print("Results: " + str(fails) + " errors in " + str(count) + " inferences (" + str(round(fails/count*100,2)) + "%)")
+    for b in [1,10,100,1000,10000]:
+      execute(test, b)
+

@@ -1,0 +1,101 @@
+(env) mark@mark-desktop:~/projects/cifar10-torch$ python cifar10-torch-v2.py -d cuda -p
+python 3.6.9
+torch 1.6.0
+torchvision 0.7.0a0+78ed10c
+matplotlib 3.3.2
+seaborn 0.11.0
+sklearn 0.23.2
+GPU number of devices: 1
+GPU device[0]=NVIDIA Tegra X1
+GPU current device: 0
+Requested device: cuda , using device: cuda:0 
+
+Dataset sizes(train): {'train': 45000, 'val': 15000}
+Dataset sizes(test): 10000
+Performing production mode inference...
+dict_keys(['model_state_dict', 'optimizer_state_dict'])
+odict_keys(['fc1.weight', 'fc1.bias', 'fc2.weight', 'fc2.bias', 'fc3.weight', 'fc3.bias', 'fc4.weight', 'fc4.bias'])
+dict_keys(['state', 'param_groups'])
+cuda:0
+Accuracy:  0.968
+Results: 324 errors in 10000 (3.24%)
+Device: cuda:0 , total images: 10000 , batch_size: 1
+To device time  : 3.535988552495837 us, 16.39%
+Processing time : 16.214607692323625 us, 75.17%
+From device time: 1.8213305394165218 us, 8.44%
+Total time      : 21.571926784235984 us, 100.0%
+Results: 324 errors in 10000 (3.24%)
+Device: cuda:0 , total images: 10000 , batch_size: 10
+To device time  : 0.4871232833247632 us, 18.88%
+Processing time : 1.8681557537056506 us, 72.41%
+From device time: 0.22460749163292348 us, 8.71%
+Total time      : 2.5798865286633372 us, 100.0%
+Results: 324 errors in 10000 (3.24%)
+Device: cuda:0 , total images: 10000 , batch_size: 100
+To device time  : 0.15891952184028924 us, 35.73%
+Processing time : 0.23974909051321447 us, 53.91%
+From device time: 0.04609121847897768 us, 10.36%
+Total time      : 0.4447598308324814 us, 100.0%
+Results: 324 errors in 10000 (3.24%)
+Device: cuda:0 , total images: 10000 , batch_size: 1000
+To device time  : 0.07198797422461212 us, 33.48%
+Processing time : 0.025660970946773887 us, 11.94%
+From device time: 0.11734439292922616 us, 54.58%
+Total time      : 0.21499333810061216 us, 100.0%
+Results: 324 errors in 10000 (3.24%)
+Device: cuda:0 , total images: 10000 , batch_size: 10000
+To device time  : 0.08778093615546823 us, 61.74%
+Processing time : 0.002142468001693487 us, 1.51%
+From device time: 0.05224835989065468 us, 36.75%
+Total time      : 0.1421717640478164 us, 100.0%
+(env) mark@mark-desktop:~/projects/cifar10-torch$ python cifar10-torch-v2.py -d cpu -p
+python 3.6.9
+torch 1.6.0
+torchvision 0.7.0a0+78ed10c
+matplotlib 3.3.2
+seaborn 0.11.0
+sklearn 0.23.2
+GPU number of devices: 1
+GPU device[0]=NVIDIA Tegra X1
+GPU current device: 0
+Requested device: cpu , using device: cpu 
+
+Dataset sizes(train): {'train': 45000, 'val': 15000}
+Dataset sizes(test): 10000
+Performing production mode inference...
+dict_keys(['model_state_dict', 'optimizer_state_dict'])
+odict_keys(['fc1.weight', 'fc1.bias', 'fc2.weight', 'fc2.bias', 'fc3.weight', 'fc3.bias', 'fc4.weight', 'fc4.bias'])
+dict_keys(['state', 'param_groups'])
+cpu
+Accuracy:  0.968
+Results: 324 errors in 10000 (3.24%)
+Device: cpu , total images: 10000 , batch_size: 1
+To device time  : 0.10980175295844674 us, 1.16%
+Processing time : 9.313919566571712 us, 98.16%
+From device time: 0.06450902088545263 us, 0.68%
+Total time      : 9.488230340415612 us, 100.0%
+Results: 324 errors in 10000 (3.24%)
+Device: cpu , total images: 10000 , batch_size: 10
+To device time  : 0.012796685798093677 us, 0.86%
+Processing time : 1.4648046041838825 us, 98.65%
+From device time: 0.007205970585346222 us, 0.49%
+Total time      : 1.4848072605673224 us, 100.0%
+Results: 324 errors in 10000 (3.24%)
+Device: cpu , total images: 10000 , batch_size: 100
+To device time  : 0.0017547067254781723 us, 0.52%
+Processing time : 0.33423131657764316 us, 99.17%
+From device time: 0.0010358397848904133 us, 0.31%
+Total time      : 0.33702186308801174 us, 100.0%
+Results: 324 errors in 10000 (3.24%)
+Device: cpu , total images: 10000 , batch_size: 1000
+To device time  : 0.0002640655729919672 us, 0.09%
+Processing time : 0.2966203351970762 us, 99.87%
+From device time: 0.00011265696957707405 us, 0.04%
+Total time      : 0.29699705773964524 us, 100.0%
+Results: 324 errors in 10000 (3.24%)
+Device: cpu , total images: 10000 , batch_size: 10000
+To device time  : 3.640609793365002e-05 us, 0.06%
+Processing time : 0.06486058002337813 us, 99.92%
+From device time: 1.3177050277590752e-05 us, 0.02%
+Total time      : 0.06491016317158937 us, 100.0%
+
